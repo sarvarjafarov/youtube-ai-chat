@@ -490,8 +490,9 @@ ${sessionSummary}${slimCsvBlock}
           promptForGemini,
           async (toolName, args) => {
             if (toolName === 'generateImage') {
-              // Handle image generation separately
-              return await handleGenerateImage(args.prompt);
+              // Pass any attached image as anchor/reference for style guidance
+              const anchor = imageParts.length > 0 ? imageParts[0] : null;
+              return await handleGenerateImage(args.prompt, anchor);
             }
             return executeJsonTool(toolName, args, sessionJsonData);
           },
@@ -611,7 +612,7 @@ ${sessionSummary}${slimCsvBlock}
   const removeImage = (i) => setImages((prev) => prev.filter((_, idx) => idx !== i));
 
   // ── Image generation handler ──────────────────────────────────────────────
-  const handleGenerateImage = useCallback(async (prompt) => {
+  const handleGenerateImage = useCallback(async (prompt, anchorImage) => {
     try {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI2 = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY || '');
@@ -619,7 +620,14 @@ ${sessionSummary}${slimCsvBlock}
         model: 'gemini-2.0-flash-exp-image-generation',
         generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
       });
-      const result = await model.generateContent(prompt);
+      // Build content parts: text prompt + optional anchor/reference image
+      const contentParts = [{ text: prompt }];
+      if (anchorImage?.data) {
+        contentParts.push({
+          inlineData: { mimeType: anchorImage.mimeType || 'image/png', data: anchorImage.data },
+        });
+      }
+      const result = await model.generateContent(contentParts);
       const parts = result.response.candidates?.[0]?.content?.parts || [];
       for (const part of parts) {
         if (part.inlineData) {
