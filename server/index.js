@@ -4,6 +4,8 @@ const { MongoClient, ObjectId } = require('mongodb');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 
+const { fetchChannelVideos } = require('./youtubeChannel');
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -47,7 +49,7 @@ app.get('/api/status', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   try {
-    const { username, password, email } = req.body;
+    const { username, password, email, firstName, lastName } = req.body;
     if (!username || !password)
       return res.status(400).json({ error: 'Username and password required' });
     const name = String(username).trim().toLowerCase();
@@ -58,6 +60,8 @@ app.post('/api/users', async (req, res) => {
       username: name,
       password: hashed,
       email: email ? String(email).trim().toLowerCase() : null,
+      firstName: firstName ? String(firstName).trim() : '',
+      lastName: lastName ? String(lastName).trim() : '',
       createdAt: new Date().toISOString(),
     });
     res.json({ ok: true });
@@ -76,7 +80,7 @@ app.post('/api/users/login', async (req, res) => {
     if (!user) return res.status(401).json({ error: 'User not found' });
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ error: 'Invalid password' });
-    res.json({ ok: true, username: name });
+    res.json({ ok: true, username: name, firstName: user.firstName || '', lastName: user.lastName || '' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -206,9 +210,28 @@ app.get('/api/messages', async (req, res) => {
   }
 });
 
+// ── YouTube Channel Videos ────────────────────────────────────────────────────
+
+app.get('/api/youtube/channel-videos', async (req, res) => {
+  try {
+    const { channelUrl, max, transcripts } = req.query;
+    if (!channelUrl) return res.status(400).json({ error: 'channelUrl is required' });
+    if (!process.env.YOUTUBE_API_KEY) return res.status(500).json({ error: 'YOUTUBE_API_KEY is not configured' });
+
+    const maxCount = Math.min(100, Math.max(1, parseInt(max || '10', 10)));
+    const includeTranscripts = transcripts !== 'false';
+
+    const videos = await fetchChannelVideos(channelUrl, { max: maxCount, includeTranscripts });
+    res.json({ count: videos.length, videos });
+  } catch (err) {
+    console.error('YouTube channel fetch error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 
 connect()
   .then(() => {
