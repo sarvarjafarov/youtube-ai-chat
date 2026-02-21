@@ -163,7 +163,24 @@ export default function Chat({ username, firstName, lastName, onLogout }) {
       return;
     }
     setMessages([]);
-    loadMessages(activeSessionId).then(setMessages);
+    loadMessages(activeSessionId).then((msgs) => {
+      // Reconstruct videoCards and generatedImages from persisted toolCalls
+      const enriched = msgs.map((m) => {
+        if (!m.toolCalls?.length) return m;
+        const videoCards = m.toolCalls
+          .filter((tc) => tc.result?._cardType === 'video')
+          .map((tc) => tc.result);
+        const generatedImages = m.toolCalls
+          .filter((tc) => tc.result?._generatedImage)
+          .map((tc) => tc.result._generatedImage);
+        return {
+          ...m,
+          ...(videoCards.length ? { videoCards } : {}),
+          ...(generatedImages.length ? { generatedImages } : {}),
+        };
+      });
+      setMessages(enriched);
+    });
   }, [activeSessionId]);
 
   useEffect(() => {
@@ -187,6 +204,8 @@ export default function Chat({ username, firstName, lastName, onLogout }) {
     setCsvContext(null);
     setSessionCsvRows(null);
     setSessionCsvHeaders(null);
+    setCsvDataSummary('');
+    setSessionSlimCsv('');
     setJsonContext(null);
     setSessionJsonData(null);
     setJsonSummary(null);
@@ -200,6 +219,8 @@ export default function Chat({ username, firstName, lastName, onLogout }) {
     setCsvContext(null);
     setSessionCsvRows(null);
     setSessionCsvHeaders(null);
+    setCsvDataSummary('');
+    setSessionSlimCsv('');
     setJsonContext(null);
     setSessionJsonData(null);
     setJsonSummary(null);
@@ -255,6 +276,7 @@ export default function Chat({ username, firstName, lastName, onLogout }) {
         setJsonSummary(buildJsonSummary(data));
       } catch (err) {
         console.error('Failed to parse JSON:', err);
+        alert('Failed to parse JSON file. Please check the file format.');
       }
     }
 
@@ -303,6 +325,7 @@ export default function Chat({ username, firstName, lastName, onLogout }) {
         setJsonSummary(buildJsonSummary(data));
       } catch (err) {
         console.error('Failed to parse JSON:', err);
+        alert('Failed to parse JSON file. Please check the file format.');
       }
     }
 
@@ -834,7 +857,7 @@ ${sessionSummary}${slimCsvBlock}
                     <ResponsiveContainer width="100%" height={280}>
                       <AreaChart data={chart.data} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
                         <defs>
-                          <linearGradient id={`gradient-${ci}`} x1="0" y1="0" x2="0" y2="1">
+                          <linearGradient id={`gradient-${m.id}-${ci}`} x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
                             <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
                           </linearGradient>
@@ -847,7 +870,7 @@ ${sessionSummary}${slimCsvBlock}
                           formatter={(v) => [v.toLocaleString(), chart.metric]}
                           labelFormatter={(l, payload) => payload?.[0]?.payload?.title || l}
                         />
-                        <Area type="monotone" dataKey="value" stroke="#818cf8" strokeWidth={2.5} fill={`url(#gradient-${ci})`} dot={{ r: 4, fill: '#818cf8', strokeWidth: 2, stroke: '#1a1a2e' }} activeDot={{ r: 6, fill: '#a5b4fc', stroke: '#818cf8', strokeWidth: 2 }} />
+                        <Area type="monotone" dataKey="value" stroke="#818cf8" strokeWidth={2.5} fill={`url(#gradient-${m.id}-${ci})`} dot={{ r: 4, fill: '#818cf8', strokeWidth: 2, stroke: '#1a1a2e' }} activeDot={{ r: 6, fill: '#a5b4fc', stroke: '#818cf8', strokeWidth: 2 }} />
                       </AreaChart>
                     </ResponsiveContainer>
                     <span className="metric-chart-hint">Click to enlarge</span>
@@ -922,7 +945,7 @@ ${sessionSummary}${slimCsvBlock}
               <span className="csv-chip-meta">
                 {csvContext.rowCount} rows · {csvContext.headers.length} cols
               </span>
-              <button className="csv-chip-remove" onClick={() => setCsvContext(null)} aria-label="Remove CSV">×</button>
+              <button className="csv-chip-remove" onClick={() => { setCsvContext(null); setSessionCsvRows(null); setSessionCsvHeaders(null); setCsvDataSummary(''); setSessionSlimCsv(''); }} aria-label="Remove CSV">×</button>
             </div>
           )}
 
